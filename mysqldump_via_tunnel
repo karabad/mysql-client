@@ -1,0 +1,4 @@
+#!/bin/sh
+make_tunnel 2> /dev/null > /dev/null
+mysqldump --port=$TUNNEL_PORT "--user=$DB_USER" "--password=$DB_PASS" "$DB_NAME"
+killall ssh > /dev/null

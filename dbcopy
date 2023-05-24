@@ -1,0 +1,63 @@
+#!/bin/sh
+
+DB_HOST1=$SRC_DB_HOST
+DB_PORT1=$SRC_DB_PORT
+if [[ ! -z "$SRC_SSH_SERVER" ]]; then
+  export SSH_PUBLIC_KEY=$SRC_SSH_PUBLIC_KEY
+  export SSH_PRIVATE_KEY=$SRC_SSH_PRIVATE_KEY
+  export SSH_SERVER=$SRC_SSH_SERVER
+  export TUNNEL_PORT=$SRC_TUNNEL_PORT
+  export DB_HOST=$SRC_DB_HOST
+  export DB_PORT=$SRC_DB_PORT
+  export SSH_USER=$SRC_SSH_USER
+  make_tunnel
+  echo "Source tunnel created: $TUNNEL_PORT -> $DB_HOST:$DB_PORT"
+  DB_HOST1=localhost
+  DB_PORT1=$SRC_TUNNEL_PORT
+fi
+
+DB_HOST2=$DST_DB_HOST
+DB_PORT2=$DST_DB_PORT
+if [[ ! -z "$DST_SSH_SERVER" ]]; then
+  export SSH_PUBLIC_KEY=$DST_SSH_PUBLIC_KEY
+  export SSH_PRIVATE_KEY=$DST_SSH_PRIVATE_KEY
+  export SSH_SERVER=$DST_SSH_SERVER
+  export TUNNEL_PORT=$DST_TUNNEL_PORT
+  export DB_HOST=$DST_DB_HOST
+  export DB_PORT=$DST_DB_PORT
+  export SSH_USER=$DST_SSH_USER
+  make_tunnel
+  echo "Destination tunnel created: $TUNNEL_PORT -> $DB_HOST:$DB_PORT"
+  DB_HOST2=localhost
+  DB_PORT2=$DST_TUNNEL_PORT
+fi
+
+if [[ ! -z "$SRC_PRE_SQL" ]]; then
+  echo "Executing pre-copy sql script on source database..."
+  echo "$SRC_PRE_SQL" | mysql --host=$DB_HOST1 --port=$DB_PORT1 "--user=$SRC_DB_USER" "--password=$SRC_DB_PASS"
+  echo "Executed pre-copy sql script on source database."
+fi
+
+if [[ ! -z "$DST_PRE_SQL" ]]; then
+  echo "Executing pre-copy sql script on destination database..."
+  echo "$DST_PRE_SQL" | mysql --host=$DB_HOST2 --port=$DB_PORT2 "--user=$DST_DB_USER" "--password=$DST_DB_PASS"
+  echo "Executed pre-copy sql script on destination database."
+fi
+
+echo "Copying database $SRC_DB_HOST:$SRC_DB_PORT/$SRC_DB_NAME to destination database $DST_DB_HOST:$DST_DB_PORT/$DST_DB_NAME ($DB_HOST1:$DB_PORT1 -> $DB_HOST2:$DB_PORT2)"
+mysqldump --host=$DB_HOST1 --port=$DB_PORT1 "--user=$SRC_DB_USER" "--password=$SRC_DB_PASS" "$SRC_DB_NAME" | mysql --host=$DB_HOST2 --port=$DB_PORT2 "--user=$DST_DB_USER" "--password=$DST_DB_PASS" "$DST_DB_NAME"
+echo "Completed copying database"
+
+if [[ ! -z "$DST_POST_SQL" ]]; then
+  echo "Executing post-copy sql script on destination database..."
+  echo "$DST_POST_SQL" | mysql --host=$DB_HOST2 --port=$DB_PORT2 "--user=$DST_DB_USER" "--password=$DST_DB_PASS"
+  echo "Executed post-copy sql script on destination database."
+fi
+
+if [[ ! -z "$SRC_POST_SQL" ]]; then
+  echo "Executing post-copy sql script on source database..."
+  echo "$SRC_POST_SQL" | mysql --host=$DB_HOST1 --port=$DB_PORT1 "--user=$SRC_DB_USER" "--password=$SRC_DB_PASS"
+  echo "Executed post-copy sql script on source database..."
+fi
+
+killall ssh > /dev/null
